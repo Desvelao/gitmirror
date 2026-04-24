@@ -1,0 +1,18 @@
+credentials:
+  github:
+    ssh_key: "/path/to/github_ssh_key_file/keys/github"
+  gitlab:
+    ssh_key: "/path/to/gitlab_ssh_key_file/keys/gitlab"
+repositories:
+  - name: "repo1"
+    url: "https://github.com/myusername/myrepo1.git"
+    credential: "github"
+    mirrors:
+      - url: "git@gitlab.com:myotherusername/gmyrepo1.git"
+        credential: "gitlab"
+  - name: "repo2"
+    url: "https://github.com/myusername/myrepo2.git"
+    credential: "github"
+    mirrors:
+      - url: "git@gitlab.com:myotherusername/gmyrepo2.git"
+        credential: "gitlab"

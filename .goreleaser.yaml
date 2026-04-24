@@ -1,0 +1,43 @@
+version: 2
+
+project_name: gitmirror
+
+before:
+  hooks:
+    - sh -c 'cd src && go mod tidy'
+
+builds:
+  - id: gitmirror
+    dir: src
+    main: ./cli
+    binary: gitmirror
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.buildOS={{.Os}} -X main.buildArch={{.Arch}} -X main.buildTime={{.Date}}
+
+archives:
+  - id: default
+    ids:
+      - gitmirror
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

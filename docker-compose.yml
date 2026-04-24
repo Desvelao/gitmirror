@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  dev:
+    # image: golang:1.18
+    image: user-golang:1.18
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "1000:1000"
+    working_dir: /app
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+    entrypoint: ["tail", "-f", "/dev/null"]
+
