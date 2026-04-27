@@ -22,8 +22,8 @@ See [Releases](https://github.com/Desvelao/gitmirror/releases) for the latest ve
 
 For example:
 ```console
-wget https://github.com/Desvelao/gitmirror/releases/download/v0.0.1-alpha2/gitmirror-0.0.1-alpha2-linux-amd64.tar.gz \
-&& tar -xzf gitmirror-0.0.1-alpha2-linux-amd64.tar.gz \
+wget https://github.com/Desvelao/gitmirror/releases/download/v0.0.1-alpha3/gitmirror-0.0.1-alpha3-linux-amd64.tar.gz \
+&& tar -xzf gitmirror-0.0.1-alpha3-linux-amd64.tar.gz \
 && sudo mv gitmirror /usr/local/bin/
 ```
 
