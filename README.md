@@ -88,6 +88,61 @@ gitmirror sync git:github.com/myuser/myrepo.git git:gitlab.com/mygitlabuser/mirr
 gitmirror sync git:github.com/myuser/myrepo.git git:gitlab.com/mygitlabuser/mirrorrepo.git --origin-ssh-key /path/to/origin_key --destination-ssh-key /path/to/destination_key --cleanup --clone-dir /path/to/local/clone
 ```
 
+## Usage as systemd service
+
+To run `gitmirror` as a systemd service, you can create a service unit file. Below is an example of how to set this up:
+
+1. Create a systemd service file, e.g., `/etc/systemd/system/gitmirror-sync.service` with the following content:
+
+```
+[Unit]
+Description=GitMirror Sync Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=myuser
+ExecStart=/usr/local/bin/gitmirror sync --discover-origin github --discover-destination gitlab --discover-origin-username MyUsername --discover-destination-username DestinationUsername --destination-ssh-key /path/to/keys/destination --origin-ssh-key /path/to/keys/origin --destination-ssh-options '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no' --origin-ssh-options '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no' -w /path/to/clone/dir --cleanup
+
+[Install]
+WantedBy=multi-user.target
+```
+
+> Replace the user to run the service.
+
+2. Create a timer unit file, e.g., `/etc/systemd/system/gitmirror-sync.timer` with the following content:
+
+```
+[Unit]
+Description=Run GitMirror sync every Sunday at midnight
+
+[Timer]
+OnCalendar=Sun 00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+3. Reload systemd to recognize the new service and timer:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now gitmirror-sync.timer
+```
+
+4. Check the status of the timer and service:
+```bash
+sudo systemctl status gitmirror-sync.service
+sudo systemctl status gitmirror-sync.timer
+systemctl list-timers --all gitmirror.timer
+```
+
+Optionally, you can also run the service manually to test it:
+```bash
+sudo systemctl start gitmirror-sync.service
+```
+
 ## Development
 
 ### Prerequisites
