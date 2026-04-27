@@ -284,15 +284,16 @@ func runSync(cmd *cobra.Command, args []string) error {
 			logger.Debug("No repositories specified in --includes, all discovered repositories are included for sync")
 		}
 
+		filterExcludes := make(map[string]bool)
 		if len(syncRepoExcludes) > 0 {
 			for _, name := range syncRepoExcludes {
-				filterIncludes[name] = false
+				filterExcludes[name] = true
 			}
 			logger.Debug(fmt.Sprintf("Filtering repositories to exclude: %v", syncRepoExcludes))
 			filtered := repos[:0]
 			for _, r := range repos {
 				logger.Debug(fmt.Sprintf("Checking if respository is excluded in filter: %s", r.Name))
-				if filterIncludes[r.Name] != false {
+				if !filterExcludes[r.Name] {
 					logger.Debug(fmt.Sprintf("Excluding repository due to filter in sync: %s", r.Name))
 					filtered = append(filtered, r)
 				}
