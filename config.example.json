@@ -1,0 +1,59 @@
+{
+  "local_clone_dir": "/path/to/local_clone_dir",
+  "local_clone_dir_cleanup": false,
+  "includes": [
+    "repo1",
+    "repo2"
+  ],
+  "excludes": [
+    "repo3"
+  ],
+  "credentials": {
+    "github": {
+      "ssh_key": "/path/to/github_ssh_key_file/keys/github",
+      "ssh_options": "-o StrictHostKeyChecking=no"
+    },
+    "gitlab": {
+      "ssh_key": "/path/to/gitlab_ssh_key_file/keys/gitlab",
+      "ssh_options": "-o StrictHostKeyChecking=no"
+    }
+  },
+  "repositories": [
+    {
+      "name": "repo1",
+      "url": "git@github.com:myusername/myrepo1.git",
+      "credential": "github",
+      "mirrors": [
+        {
+          "url": "git@gitlab.com:myotherusername/gmyrepo1.git",
+          "credential": "gitlab"
+        }
+      ]
+    },
+    {
+      "name": "repo2",
+      "url": "git@github.com:myusername/myrepo2.git",
+      "credential": "github",
+      "mirrors": [
+        {
+          "url": "git@gitlab.com:myotherusername/gmyrepo2.git",
+          "credential": "gitlab"
+        }
+      ]
+    },
+    {
+      "name": "repo3",
+      "url": "git@github.com:myusername/myrepo3.git",
+      "ssh_key": "/path/to/github_ssh_key_file/keys/another_github_key",
+      "ssh_options": "-o StrictHostKeyChecking=no",
+      "mirrors": [
+        {
+          "url": "git@gitlab.com:myotherusername/gmyrepo3.git",
+          "ssh_key": "/path/to/github_ssh_key_file/keys/another_gitlab_key",
+          "ssh_options": "-o StrictHostKeyChecking=no"
+        }
+      ]
+    }
+  ]
+}
+

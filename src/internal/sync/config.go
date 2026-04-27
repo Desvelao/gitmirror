@@ -16,6 +16,7 @@ type Mirror struct {
 	Name       string `json:"name,omitempty" yaml:"name,omitempty"`
 	URL        string `json:"url" yaml:"url"`
 	SSHKey     string `json:"ssh_key,omitempty" yaml:"ssh_key,omitempty"`
+	SSHCmdOpts string `json:"ssh_command_options,omitempty" yaml:"ssh_command_options,omitempty"`
 	Credential string `json:"credential,omitempty" yaml:"credential,omitempty"`
 }
 
@@ -24,11 +25,14 @@ type ConfigRepo struct {
 	URL        string   `json:"url" yaml:"url"`
 	Credential string   `json:"credential,omitempty" yaml:"credential,omitempty"`
 	SSHKey     string   `json:"ssh_key,omitempty" yaml:"ssh_key,omitempty"`
+	SSHCmdOpts string   `json:"ssh_command_options,omitempty" yaml:"ssh_command_options,omitempty"`
+	LocalCloneDirCleanup bool `json:"local_clone_dir_cleanup,omitempty" yaml:"local_clone_dir_cleanup,omitempty"`
 	Mirrors    []Mirror `json:"mirrors" yaml:"mirrors"`
 }
 
 type SyncConfigFileCredential struct {
-	SSHKey string `json:"ssh_key,omitempty" yaml:"ssh_key,omitempty"`
+	SSHKey     string `json:"ssh_key,omitempty" yaml:"ssh_key,omitempty"`
+	SSHCmdOpts string `json:"ssh_command_options,omitempty" yaml:"ssh_command_options,omitempty"`
 }
 
 type SyncConfigFileCredentials map[string]SyncConfigFileCredential
@@ -36,7 +40,10 @@ type SyncConfigFileCredentials map[string]SyncConfigFileCredential
 // Config holds the configuration settings for the application.
 type SyncConfigFile struct {
 	LocalCloneDir      string              `json:"local_clone_dir" yaml:"local_clone_dir"`
+	LocalCloneDirCleanup bool              `json:"local_clone_dir_cleanup" yaml:"local_clone_dir_cleanup"`
 	Credentials  SyncConfigFileCredentials `json:"credentials" yaml:"credentials"`
+	Includes     []string                  `json:"includes" yaml:"includes"`
+	Excludes     []string                  `json:"excludes" yaml:"excludes"`
 	Repositories []ConfigRepo              `json:"repositories" yaml:"repositories"`
 }
 

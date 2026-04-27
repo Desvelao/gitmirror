@@ -19,6 +19,7 @@ type RepoSync struct {
 	URL        string `json:"url"`
 	Credential string `json:"credential,omitempty"`
 	SSHKey     string `json:"ssh_key,omitempty"`
+	SSHCmdOpts string `json:"ssh_command_options,omitempty"`
 	Protocol   string `json:"protocol,omitempty"`
 }
 
@@ -32,6 +33,10 @@ func (r RepoSync) GetURL() string {
 
 func (r RepoSync) GetSSHKey() string {
 	return r.SSHKey
+}
+
+func (r RepoSync) GetSSHCmdOpts() string {
+	return r.SSHCmdOpts
 }
 
 func (r RepoSync) ToString() string {
@@ -60,6 +65,7 @@ type RepoConfigureGitCommand interface {
 	GetName() string
 	GetURL() string
 	GetSSHKey() string
+	GetSSHCmdOpts() string
 }
 
 type SummarySyncRepoResult struct {
@@ -142,12 +148,13 @@ func (s *SummarySyncRepoResult) End() {
 type SyncRepoOptions struct {
 	LocalCloneDir   string
 	Credentials     SyncConfigFileCredentials
-	RemoveLocalRepo bool
+	LocalCloneDirCleanup bool
 	Vars            map[string]string
 }
 
 // SyncRepo synchronizes a repository between providers.
 func SyncRepo(repo RepoSync, mirrors []RepoSync, options SyncRepoOptions) (SummarySyncRepoResult, error) {
+	logger.Debug(fmt.Sprintf("Starting sync for repository %s with mirrors %v and options %v", repo.ToString(), mirrors, options))
 	summary := SummarySyncRepoResult{
 		Name: repo.Name,
 		URL:  repo.URL,
@@ -159,7 +166,7 @@ func SyncRepo(repo RepoSync, mirrors []RepoSync, options SyncRepoOptions) (Summa
 		// _ = os.RemoveAll(cloneDir)
 		logger.Debug(fmt.Sprintf("Cleaning up local repository for %s", repo.ToString()))
 
-		if options.RemoveLocalRepo {
+		if options.LocalCloneDirCleanup {
 			repoDir := filepath.Join(options.LocalCloneDir, repo.Name+".git")
 			logger.Debug(fmt.Sprintf("Removing local repository directory %s for %s", repoDir, repo.ToString()))
 			if err := os.RemoveAll(repoDir); err != nil {
@@ -256,8 +263,13 @@ func mergeRepoSyncCredentials(mirror RepoSync, credentials SyncConfigFileCredent
 		}
 
 		if resolvedMirror.SSHKey == "" {
-			logger.Debug(fmt.Sprintf("Resolving SSH key for reposync %s using credential %s", mirror.URL, resolvedMirror.Credential))
+			logger.Debug(fmt.Sprintf("Resolving SSH key for reposync %s using credential %s", mirror.ToString(), resolvedMirror.Credential))
 			resolvedMirror.SSHKey = credential.SSHKey
+		}
+
+		if resolvedMirror.SSHCmdOpts == "" {
+			logger.Debug(fmt.Sprintf("Resolving SSH command options for reposync %s using credential %s", mirror.ToString(), resolvedMirror.Credential))
+			resolvedMirror.SSHCmdOpts = credential.SSHCmdOpts
 		}
 	}
 
@@ -279,7 +291,9 @@ func cloneRepo(repo RepoSync, options SyncRepoOptions) error {
 	logger.Debug(fmt.Sprintf("Cloning %s into %s", repo.ToString(), repoDirPath))
 	cmd := exec.Command("git", "clone", "--mirror", repo.URL, repoDir)
 	cmd.Dir = options.LocalCloneDir
-	configureGitCommand(cmd, repo)
+	if err := configureGitCommand(cmd, repo); err != nil {
+		return fmt.Errorf("error configuring git command for cloning %s: %w", repo.ToString(), err)
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git clone --mirror %s %s failed: %w\n%s", repo.URL, repoDir, err, string(output))
@@ -326,7 +340,11 @@ func fetchRepo(repo RepoSync, options SyncRepoOptions) error {
 	logger.Debug(fmt.Sprintf("Fetching latest changes for %s", repo.ToString()))
 	cmd := exec.Command("git", "fetch", "origin", "--prune", "--tags")
 	cmd.Dir = filepath.Join(options.LocalCloneDir, repo.Name+".git")
-	configureGitCommand(cmd, repo)
+	
+	if err := configureGitCommand(cmd, repo); err != nil {
+		return fmt.Errorf("error configuring git command for fetching %s: %w", repo.ToString(), err)
+	}
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git fetch failed for %s: %w\n%s", repo.ToString(), err, string(output))
@@ -341,7 +359,9 @@ func pushToMirror(repo RepoSync, mirror RepoSync, options SyncRepoOptions) error
 	cmd := exec.Command("git", "push", "--mirror", mirror.URL)
 	cmd.Dir = filepath.Join(options.LocalCloneDir, repo.Name+".git")
 
-	configureGitCommand(cmd, mirror)
+	if err := configureGitCommand(cmd, mirror); err != nil {
+		return fmt.Errorf("error configuring git command for pushing %s to mirror %s: %w", repo.ToString(), mirror.ToString(), err)
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -366,15 +386,20 @@ func createRepo(repo RepoSync, options SyncRepoOptions) error {
 	return nil
 }
 
-func configureGitCommand(cmd *exec.Cmd, repo RepoConfigureGitCommand) {
+func configureGitCommand(cmd *exec.Cmd, repo RepoConfigureGitCommand) error {
 	if repo.GetURL()[:4] == "ssh:" || repo.GetURL()[:4] == "git@" {
 		if repo.GetSSHKey() != "" {
 			logger.Debug(fmt.Sprintf("Configuring GIT_SSH_COMMAND for repository %s to use SSH key %s", repo.GetURL(), repo.GetSSHKey()))
-			cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_SSH_COMMAND=ssh -i '%s' -o IdentitiesOnly=yes", repo.GetSSHKey()))
+			sshOptions := fmt.Sprintf("ssh -i '%s' -o IdentitiesOnly=yes", repo.GetSSHKey())
+			if repo.GetSSHCmdOpts() != "" {
+				sshOptions += " " + repo.GetSSHCmdOpts()
+			}
+			cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_SSH_COMMAND=%s", sshOptions))
 		} else {
-			logger.Error(fmt.Sprintf("SSH mirror %s requires ssh_key in config", repo.GetURL()))
+			return fmt.Errorf("SSH repository %s requires SSH key definition", repo.GetURL())
 		}
 	}
+	return nil
 }
 
 func getRepoNameFromURL(repoURL string) string {

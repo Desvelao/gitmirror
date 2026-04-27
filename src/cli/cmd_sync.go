@@ -22,6 +22,8 @@ var summaryOutputPath string
 var localCloneDir string
 var origin_ssh_key string
 var destination_ssh_key string
+var origin_ssh_options string
+var destination_ssh_options string
 var customVars []string
 var removeLocalClone bool
 var cfgFile string
@@ -46,20 +48,21 @@ func resolvePathFromExecutionDir(pathValue string, executionDir string) string {
 }
 
 func init() {
-	syncCmd.Flags().StringVarP(&localCloneDir, "clone-dir", "w", "", "working directory to use for cloning and syncing repositories (overrides config)")
-	syncCmd.Flags().StringVarP(&discoverOriginUsername, "discover-origin-username", "u", "", "provider username to discover repositories from (overrides config)")
-	syncCmd.Flags().StringVarP(&discoverDestinationUsername, "discover-destination-username", "m", "", "provider username to discover repositories from (overrides config)")
-	syncCmd.Flags().StringVarP(&discoverOriginType, "discover-origin", "p", "", "source platform to sync repositories from (overrides config)")
-	syncCmd.Flags().StringVarP(&discoverDestinationType, "discover-destination", "q", "", "destination platform to sync repositories to (overrides config)")
+	syncCmd.Flags().StringVarP(&localCloneDir, "clone-dir", "w", "", "working directory to use for cloning and syncing repositories (defaults to current directory)")
+	syncCmd.Flags().StringVarP(&discoverOriginUsername, "discover-origin-username", "", "", "provider username to discover repositories from")
+	syncCmd.Flags().StringVarP(&discoverDestinationUsername, "discover-destination-username", "", "", "provider username to discover repositories from")
+	syncCmd.Flags().StringVarP(&discoverOriginType, "discover-origin", "", "", "source platform to sync repositories from")
+	syncCmd.Flags().StringVarP(&discoverDestinationType, "discover-destination", "", "", "destination platform to sync repositories to")
 	syncCmd.Flags().StringArrayVarP(&syncRepoIncludes, "includes", "i", []string{}, "include repositories to sync (can be specified multiple times)")
 	syncCmd.Flags().StringArrayVarP(&syncRepoExcludes, "excludes", "e", []string{}, "exclude repositories from sync (can be specified multiple times)")
 	syncCmd.Flags().StringArrayVarP(&customVars, "var", "v", []string{}, "define variables to use in config file (format: key=value, can be specified multiple times)")
-	syncCmd.Flags().StringVarP(&origin_ssh_key, "origin-ssh-key", "k", "", "SSH key to use for the origin repository (overrides config)")
-	syncCmd.Flags().StringVarP(&destination_ssh_key, "destination-ssh-key", "d", "", "SSH key to use for the destination repository (overrides config)")
+	syncCmd.Flags().StringVarP(&origin_ssh_key, "origin-ssh-key", "", "", "SSH key to use for the origin repository")
+	syncCmd.Flags().StringVarP(&destination_ssh_key, "destination-ssh-key", "", "", "SSH key to use for the destination repository")
+	syncCmd.Flags().StringVarP(&origin_ssh_options, "origin-ssh-options", "", "", "SSH options to use for the origin repository")
+	syncCmd.Flags().StringVarP(&destination_ssh_options, "destination-ssh-options", "", "", "SSH options to use for the destination repository")
 	syncCmd.Flags().StringVarP(&summaryOutputPath, "summary", "s", "", "summary output file path (JSON)")
-	syncCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "path to config file")
+	syncCmd.Flags().StringVarP(&cfgFile, "config", "c", "", "path to config file in JSON or YAML format with repositories to sync")
 	syncCmd.Flags().BoolVar(&removeLocalClone, "cleanup", false, "remove the local clone of the repository after syncing (use with caution, this will delete the local copy of the repository after syncing, use only if you are sure you don't need it anymore)")
-
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
@@ -110,7 +113,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 	logger.Debug(fmt.Sprintf("origin: %s", origin))
 	logger.Debug(fmt.Sprintf("destination: %s", destination))
 	logger.Debug(fmt.Sprintf("origin_ssh_key: %s", origin_ssh_key))
+	logger.Debug(fmt.Sprintf("origin_ssh_options: %s", origin_ssh_options))
 	logger.Debug(fmt.Sprintf("destination_ssh_key: %s", destination_ssh_key))
+	logger.Debug(fmt.Sprintf("destination_ssh_options: %s", destination_ssh_options))
 	logger.Debug(fmt.Sprintf("customVars: %v", customVarsMap))
 	logger.Debug(fmt.Sprintf("remove: %v", removeLocalClone))
 
@@ -120,6 +125,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		DurationSec: 0,
 		InputParameters: map[string]interface{}{
 			"local_clone_dir":               resolvedLocalCloneDir,
+			"local_clone_dir_cleanup":       removeLocalClone,
 			"discover_origin_username":      discoverOriginUsername,
 			"discover_origin_type":          discoverOriginType,
 			"discover_destination_username": discoverDestinationUsername,
@@ -131,7 +137,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 			"origin_ssh_key":                origin_ssh_key,
 			"destination_ssh_key":           destination_ssh_key,
 			"custom_vars":                   customVarsMap,
-			"remove_local_clone":            removeLocalClone,
 		},
 	}
 	summary.Init()
@@ -139,13 +144,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 	syncOptions := sync.SyncRepoOptions{
 		LocalCloneDir:   resolvedLocalCloneDir,
 		Vars:            customVarsMap,
-		RemoveLocalRepo: removeLocalClone,
+		LocalCloneDirCleanup: removeLocalClone,
 	}
 
 	// Origin-destination mode: if both origin and destination are provided as positional args, we sync just that pair
 	if origin != "" && destination != "" {
 		mode = "origin-destination"
-		syncOptions.RemoveLocalRepo = true
+		syncOptions.LocalCloneDirCleanup = true
 	} else if discoverOriginUsername != "" {
 		mode = "discover"
 	} else if cfgFile != "" {
@@ -197,6 +202,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 					URL:        repo.URL,
 					Credential: "",
 					SSHKey:     resolvePathFromExecutionDir(origin_ssh_key, executionDir),
+					SSHCmdOpts: origin_ssh_options,
 				})
 			}
 
@@ -207,12 +213,26 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 
 		cfg, err := sync.LoadConfig(cfgFile)
-		syncOptions.Credentials = cfg.Credentials
 		if err != nil {
 			return fmt.Errorf("error loading config: %w", err)
-		} else {
-
 		}
+		
+		syncOptions.Credentials = cfg.Credentials
+		syncOptions.LocalCloneDir = resolvePathFromExecutionDir(cfg.LocalCloneDir, executionDir)
+		syncOptions.LocalCloneDirCleanup = cfg.LocalCloneDirCleanup
+
+		if cfg.Includes != nil {
+			for _, name := range cfg.Includes {
+				syncRepoIncludes = append(syncRepoIncludes, name)
+			}
+		}
+
+		if cfg.Excludes != nil {
+			for _, name := range cfg.Excludes {
+				syncRepoExcludes = append(syncRepoExcludes, name)
+			}
+		}
+		
 		repoNames := make(map[string]bool)
 		for _, repo := range cfg.Repositories {
 			if repoNames[repo.Name] {
@@ -224,6 +244,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 				URL:        repo.URL,
 				Credential: repo.Credential,
 				SSHKey:     resolvePathFromExecutionDir(repo.SSHKey, executionDir),
+				SSHCmdOpts: repo.SSHCmdOpts,
 			})
 			for _, mirror := range repo.Mirrors {
 				if destinationMapByOrigin[repo.Name] == nil {
@@ -234,6 +255,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 					URL:        mirror.URL,
 					Credential: mirror.Credential,
 					SSHKey:     resolvePathFromExecutionDir(mirror.SSHKey, executionDir),
+					SSHCmdOpts: mirror.SSHCmdOpts,
 				})
 			}
 		}
@@ -298,12 +320,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 			Name:   "origin",
 			URL:    origin,
 			SSHKey: resolvePathFromExecutionDir(origin_ssh_key, executionDir),
+			SSHCmdOpts: origin_ssh_options,
 		}
 		mirrors := []sync.RepoSync{
 			{
 				Name:   "destination",
 				URL:    destination,
 				SSHKey: resolvePathFromExecutionDir(destination_ssh_key, executionDir),
+				SSHCmdOpts: destination_ssh_options,
 			},
 		}
 		if summ, err := sync.SyncRepo(syncRepo, mirrors, syncOptions); err != nil {
@@ -347,6 +371,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 					Name:   "destination",
 					URL:    mirrorURL,
 					SSHKey: resolvePathFromExecutionDir(destination_ssh_key, executionDir),
+					SSHCmdOpts: destination_ssh_options,
 				},
 			}
 
@@ -369,17 +394,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 			mirrors := destinationMapByOrigin[syncRepo.Name]
 
-			if err != nil {
-				logger.Error(fmt.Sprintf("Error resolving mirrors for %s: %v", syncRepo.ToString(), err))
-				continue
-			}
-
 			logger.Debug(fmt.Sprintf("Found mirrors for %s: %v", syncRepo.ToString(), mirrors))
 
 			if len(mirrors) == 0 {
 				logger.Warn(fmt.Sprintf("No mirrors configured for %s, skipping sync", syncRepo.ToString()))
 				continue
 			}
+
 			if summ, err := sync.SyncRepo(syncRepo, mirrors, syncOptions); err != nil {
 				logger.Error(fmt.Sprintf("Error syncing %s: %v", syncRepo.ToString(), err))
 				summ.End()
